@@ -1,68 +1,89 @@
 # pipecat-wavix
 
-`pipecat-wavix` Serializer for Wavix WebSocket protocol.
-This serializer handles bidirectional audio convertion between Pipecat frames and Wavix WebSocket media stream protocol.
-Wavix media contract is outlined below:
-- Format: **pcm16**
-- Sample rate: **24 kHz**
-- Bit depth: **16-bit**
-- Frame size: **20ms**
-- Channels: **Mono**
-- Endianness: **Little-endian**
+Stream real-time audio between Pipecat and Wavix using WebSockets.
 
+`pipecat-wavix` converts audio between Pipecat frames and the Wavix media stream format so you can build voice-enabled applications quickly.
 
-# Prerequisites
+---
+
+## Wavix audio format
+
+Wavix uses the following audio format:
+
+* Format: PCM16
+* Sample rate: 24 kHz
+* Bit depth: 16-bit
+* Frame size: 20 ms
+* Channels: mono
+* Endianness: little-endian
+
+---
+
+## Prerequisites
 
 ### Wavix account
-Before using the Wavix Frame serializer for Pipecat, you'll need:
-- An active [Wavix account](https://docs.wavix.com/getting-started/create-account)
-- A Wavix phone number
 
-### Evironment variables
-- `WAVIX_API_KEY` - [Wavix API key](https://docs.wavix.com/api-reference/authentication)
-- `OPENAI_API_KEY` - OpenAI API key
-- `DEEPGRAM_API_KEY` - Deepgram API key
-- `CARTESIA_API_KEY` - Cartesia API key
+Before you start, make sure you have:
 
-## System
-- Python 3.12
-- `uv` package manager
-- ngrok (for local development)
+* A Wavix account: https://docs.wavix.com/getting-started/create-account
+* A Wavix phone number
 
-# Setup
-Install WavixFrameSerializer
+### Environment variables
+
+Set these environment variables:
+
+* `WAVIX_API_KEY` – your Wavix API key
+* `OPENAI_API_KEY` – your OpenAI API key
+* `DEEPGRAM_API_KEY` – your Deepgram API key
+* `CARTESIA_API_KEY` – your Cartesia API key
+
+### System requirements
+
+* Python 3.12
+* `uv` package manager
+* ngrok (for local development)
+
+---
+
+## Setup
+
+Install the package:
 
 ```bash
 pip install pipecat-wavix
 ```
 
-If your prefer `uv`, update your pyproject.toml:
-```bash
+If you use `uv`, add it to your `pyproject.toml`:
+
+```toml
 [project]
-name = "your-project"
-version = "0.1.0"
 dependencies = [
-    "pipecat-wavix>=1.0.0",
-    "Any other packages"
+    "pipecat-wavix>=1.0.0"
 ]
 ```
-Set up a virtual environment and install dependencies:
+
+Then install dependencies:
+
 ```bash
 uv sync
 ```
 
-## Usage with Pipecat Pipeline
+---
 
-Import WavixFrameSerializer to your project
+## Use with a Pipecat pipeline
+
+Import the serializer:
+
 ```python
 from pipecat_wavix import WavixFrameSerializer
 ```
+
+Configure it:
 
 ```python
 WAVIX_SAMPLE_RATE = 24000
 BOT_SAMPLE_RATE = 16000
 
-# ── Serializer ─────────────────────────────────────────────────────────────
 serializer = WavixFrameSerializer(
     stream_id=stream_id,
     params=WavixFrameSerializer.InputParams(
@@ -70,12 +91,12 @@ serializer = WavixFrameSerializer(
         sample_rate=BOT_SAMPLE_RATE,
         audio_track="inbound",
     ),
-)    
-# ── Transport ──────────────────────────────────────────────────────────────
-"""
-Outbound audio is normalized to Wavix's required format:
-PCM16, 24 kHz, mono, little-endian, 20 ms frames.
-"""
+)
+```
+
+Set up the transport:
+
+```python
 transport = FastAPIWebsocketTransport(
     websocket=websocket,
     params=FastAPIWebsocketParams(
@@ -92,79 +113,91 @@ transport = FastAPIWebsocketTransport(
 )
 ```
 
-# Running the example
-## Recommended Way: Run `server.py`
-Use `server.py` if you want the full Wavix call flow handled automatically.
+Outbound audio is automatically converted to Wavix’s required format: PCM16, 24 kHz, mono, little-endian, 20 ms frames.
 
-### What `server.py` does
+---
 
-1. Starts FastAPI locally.
-2. Opens an ngrok tunnel automatically.
-3. Exposes:
-   - `POST /wavix/inbound` for the Wavix webhook
-   - `GET /health` for health checks
-   - `WS /ws` for Wavix media streaming
-4. When Wavix sends the inbound webhook, it:
-   - answers the call
-   - starts bidirectional media streaming to `/ws`
-5. When Wavix connects to `/ws`, the server launches the bot from `bot.py`
+## Run the example
 
-### Command
+### Option 1: run server.py (recommended)
+
+Use `server.py` to handle the full Wavix call flow.
+
+Run:
 
 ```bash
 uv run server.py
 ```
 
-### What to expect
+The server:
 
-The server will print values like:
+* Starts a FastAPI app
+* Opens an ngrok tunnel
+* Exposes:
 
-- local URL: `http://localhost:7860`
-- public ngrok URL
-- webhook URL: `https://.../wavix/inbound`
-- websocket URL: `wss://.../ws`
+  * `POST /wavix/inbound` (webhook)
+  * `GET /health` (health check)
+  * `WS /ws` (media stream)
 
-### Wavix configuration
+When a call arrives, the server:
 
-Configure your Wavix number's voice webhook to the printed webhook URL.
+* Answers the call
+* Starts bidirectional streaming to `/ws`
+* Launches the bot from `bot.py`
+
+### What you’ll see
+
+The server prints:
+
+* Local URL (for example, `http://localhost:7860`)
+* Public ngrok URL
+* Webhook URL (`https://.../wavix/inbound`)
+* WebSocket URL (`wss://.../ws`)
+
+### Configure Wavix
+
+Set your Wavix number’s voice webhook to:
 
 ```text
 https://your-public-url/wavix/inbound
 ```
 
-1. Log in to your Wavix account.
-2. Navigate to **Numbers & trunks** → **My numbers**.
-3. Select your number by clicking the ⋯ menu → **Edit number**.
-4. Configure the **Voice webhook** by pasting the printed ngrok's *Webhook* URL and click **Save**.
+To update your number:
 
+1. Sign in to your Wavix account.
+2. Go to **Numbers & trunks** > **My numbers**.
+3. Select your number.
+4. Choose **Edit number**.
+5. Paste the webhook URL.
+6. Select **Save**.
 
-After that, place a call to the number. The server handles the rest.
+Then call your number. The server handles the rest.
 
-### Important notes
+### Important
 
-- Do not start ngrok manually for this mode.
-- Do not manually call the Wavix answer/stream APIs in this mode. `server.py` already does that.
+* Don’t start ngrok manually in this mode.
+* Don’t call Wavix APIs manually—`server.py` handles everything.
 
-## Standalone Bot Mode: Run `bot.py`
+---
 
-Use `bot.py` only if you want to run the Pipecat development runner and you are prepared to manage Wavix call answer/stream setup separately.
+## Run bot.py (standalone mode)
 
-### What `bot.py` does
+Use `bot.py` if you want to run the Pipecat development runner and manage Wavix calls yourself.
 
-- Starts Pipecat's development runner.
-- Accepts a telephony WebSocket connection.
-- Parses the initial Wavix handshake from the WebSocket.
-- Builds the Pipecat transport and audio pipeline.
+### What it does
 
-### What `bot.py` does not do
+* Starts the Pipecat development runner
+* Accepts a WebSocket connection
+* Parses the Wavix handshake
+* Builds the audio pipeline
 
-- It does not call the Wavix REST API to answer the call.
-- It does not create the Wavix stream for you.
-- It does not replace `server.py` as a full inbound call orchestrator.
+### What it doesn’t do
 
-### Command
+* Doesn’t answer calls
+* Doesn’t create streams
+* Doesn’t replace `server.py`
 
-Run the Pipecat development runner:
+### Run the bot
 
 ```bash
 uv run bot.py --transport wavix --proxy your-public-hostname
@@ -173,27 +206,31 @@ uv run bot.py --transport wavix --proxy your-public-hostname
 Example:
 
 ```bash
-uv run bot.py --transport wavix --proxy semiprovincial-forwardly-eloy.ngrok-free.dev
+uv run bot.py --transport wavix --proxy your-ngrok-url.ngrok-free.dev
 ```
 
-### Public exposure
+### Expose your local server
 
-In this mode, start ngrok in another terminal:
+Start ngrok in a separate terminal:
 
 ```bash
 ngrok http 7860
 ```
 
-Use the hostname from ngrok as the `--proxy` value. Do not include `https://` in the `--proxy` argument unless Pipecat specifically requires it in your environment.
+Use the ngrok hostname as the `--proxy` value (without `https://`, unless required).
 
-### Wavix setup for standalone bot mode
+---
 
-Because `bot.py` only handles the media WebSocket, you must answer the call and start streaming programmatically.
+## Set up Wavix (standalone mode)
 
-Typical sequence:
+In this mode, you must handle call control yourself.
 
-1. Receive or know the `call_id`. You can configure your Wavix number's voice webhook as described earlier to receive the [on-call events](https://docs.wavix.com/api-reference/call-webhooks/on-call-event).
-2. Answer the call through Wavix:
+### Typical flow
+
+1. Get the `call_id` from Wavix webhooks
+   https://docs.wavix.com/api-reference/call-webhooks/on-call-event
+
+2. Answer the call:
 
 ```bash
 curl -L "https://api.wavix.com/v1/calls/$CALL_ID/answer" \
@@ -202,7 +239,7 @@ curl -L "https://api.wavix.com/v1/calls/$CALL_ID/answer" \
   -d '{}'
 ```
 
-3. Start the media stream to the Pipecat runner WebSocket:
+3. Start streaming:
 
 ```bash
 curl -L "https://api.wavix.com/v1/calls/$CALL_ID/streams" \
@@ -215,8 +252,20 @@ curl -L "https://api.wavix.com/v1/calls/$CALL_ID/streams" \
   }'
 ```
 
-### When to use `bot.py`
+---
 
-- Use it for local Pipecat runner testing.
-- Use it if another service handles the Wavix webhook and REST orchestration.
-- Do not use it as the primary inbound call entrypoint unless you have that external orchestration.
+## When to use each mode
+
+Use `server.py` if you want:
+
+* A complete, ready-to-run setup
+* Automatic webhook handling
+* Minimal configuration
+
+Use `bot.py` if you want:
+
+* Full control over call handling
+* Integration with your own backend
+* A development/testing setup
+
+---

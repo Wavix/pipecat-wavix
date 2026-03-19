@@ -6,6 +6,41 @@ Stream real-time audio between Pipecat and Wavix using WebSockets.
 
 ---
 
+## What this project does
+
+This repository contains the source code for the Wavix Frame Serializer for Pipecat.
+
+It lets you stream audio between Pipecat and Wavix by converting audio data between their formats in real time.
+
+---
+
+## What’s included
+
+This project includes:
+
+* **WavixFrameSerializer**
+  Converts audio between Pipecat frames and the Wavix WebSocket media stream format.
+
+* **bot.py**
+  A minimal example that runs a Pipecat development bot and connects to a Wavix media stream.
+  Use this if you want full control over call handling.
+
+* **server.py**
+  A complete example that handles the full Wavix call flow, including webhooks, call answering, and media streaming.
+  Use this if you want a ready-to-run setup with minimal configuration.
+
+---
+
+## When to use this
+
+Use this project if you want to:
+
+* Build voice applications with Pipecat and Wavix
+* Stream real-time audio over WebSockets
+* Prototype or test telephony integration
+
+---
+
 ## Wavix audio format
 
 Wavix uses the following audio format:
@@ -137,9 +172,9 @@ The server:
 
   * `POST /wavix/inbound` (webhook)
   * `GET /health` (health check)
-  * `WS /ws` (media stream)
+  * `WS /ws` (WebSocket for media stream)
 
-When a call arrives, the server:
+When a call reaches your Wavix number, the server:
 
 * Answers the call
 * Starts bidirectional streaming to `/ws`
@@ -176,7 +211,7 @@ Then call your number. The server handles the rest.
 ### Important
 
 * Don’t start ngrok manually in this mode.
-* Don’t call Wavix APIs manually—`server.py` handles everything.
+* Don’t call Wavix APIs manually — `server.py` handles everything.
 
 ---
 
@@ -217,7 +252,7 @@ Start ngrok in a separate terminal:
 ngrok http 7860
 ```
 
-Use the ngrok hostname as the `--proxy` value (without `https://`, unless required).
+Use the ngrok hostname as the `--proxy` value (don’t include `https://`, unless required).
 
 ---
 
@@ -266,6 +301,6 @@ Use `bot.py` if you want:
 
 * Full control over call handling
 * Integration with your own backend
-* A development/testing setup
+* A development or testing setup
 
 ---

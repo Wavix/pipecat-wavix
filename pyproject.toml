@@ -28,7 +28,6 @@ classifiers = [
 
 dependencies = [
     "pipecat-ai[deepgram,runner,websocket]>=0.0.105",
-    "loguru>=0.7.0",
 ]
 
 [project.optional-dependencies]

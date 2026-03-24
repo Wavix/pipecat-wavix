@@ -10,4 +10,4 @@ and the Wavix WebSocket media stream protocol.
 from .wavix_serializer import WavixFrameSerializer
 
 __all__ = ["WavixFrameSerializer"]
-__version__ = "1.0.1"
+__version__ = "1.0.2"

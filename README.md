@@ -93,7 +93,7 @@ If you use `uv`, add it to your `pyproject.toml`:
 ```toml
 [project]
 dependencies = [
-    "pipecat-wavix>=1.0.0"
+    "pipecat-wavix>=1.1.0"
 ]
 ```
 

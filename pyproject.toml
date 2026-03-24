@@ -4,15 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pipecat-wavix"
-version = "1.0.2"
+version = "1.1.0"
 description = "Wavix WebSocket serializer for Pipecat"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.14"
 readme = "README.md"
 authors = [
-    {name = "Wavix", email="support@wavix.com"}
+    { name = "Wavix", email = "support@wavix.com" }
 ]
 
 keywords = ["wavix", "pipecat", "voice", "telephony", "websocket", "audio", "serializer"]
+
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
@@ -21,13 +22,14 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Operating System :: OS Independent",
   "Topic :: Communications :: Telephony",
   "Topic :: Software Development :: Libraries :: Python Modules"
 ]
 
 dependencies = [
-    "pipecat-ai[deepgram,runner,websocket]>=0.0.105",
+    "pipecat-ai[deepgram,runner,websocket]==0.0.105",
 ]
 
 [project.optional-dependencies]
@@ -37,16 +39,13 @@ examples = [
   "python-dotenv>=1.0.0",
 ]
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/pipecat_wavix"]
-
 [project.urls]
 Homepage = "https://github.com/wavix/pipecat-wavix"
 Repository = "https://github.com/wavix/pipecat-wavix"
 Issues = "https://github.com/wavix/pipecat-wavix/issues"
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]

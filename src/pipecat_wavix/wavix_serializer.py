@@ -24,22 +24,22 @@ from __future__ import annotations
 
 import base64
 import json
-from typing import Optional
+from typing import Any
 
 from loguru import logger
+from pydantic import model_validator
 
-from pipecat.audio.utils import create_stream_resampler
 from pipecat.frames.frames import (
     AudioRawFrame,
-    EndFrame,
     Frame,
     InputAudioRawFrame,
     InterruptionFrame,
     OutputTransportMessageFrame,
     OutputTransportMessageUrgentFrame,
-    StartFrame,
 )
+from pipecat.processors.frame_processor import FrameProcessorSetup
 from pipecat.serializers.base_serializer import FrameSerializer
+from pipecat.utils.deprecation import warn_deprecated
 
 
 class WavixFrameSerializer(FrameSerializer):
@@ -77,52 +77,83 @@ class WavixFrameSerializer(FrameSerializer):
         """
         Serializer config.
 
+        audio_in_sample_rate:
+            Sample rate of the audio Wavix sends on the websocket.
+            Defaults to 24000.
+        audio_out_sample_rate:
+            Sample rate of the audio sent to Wavix on the websocket.
+            Defaults to 24000.
         wavix_sample_rate:
-            The websocket wire sample rate expected by Wavix.
+            Deprecated. Use audio_in_sample_rate and audio_out_sample_rate.
         sample_rate:
-            The internal Pipecat input sample rate.
-            This is typically 16000 for STT + VAD.
+            Deprecated. Overrides the rate inbound audio is converted to.
+            Use PipelineParams.audio_in_sample_rate instead, which is the
+            rate the serializer converts inbound audio to by default.
         audio_track:
             Optional track filter for inbound media.
         """
 
-        wavix_sample_rate: int = 24000
-        sample_rate: Optional[int] = None
-        audio_track: Optional[str] = "inbound"
+        audio_in_sample_rate: int = 24000
+        audio_out_sample_rate: int = 24000
+        wavix_sample_rate: int | None = None
+        sample_rate: int | None = None
+        audio_track: str | None = "inbound"
+
+        @model_validator(mode="before")
+        @classmethod
+        def _carry_deprecated_rates(cls, data: Any) -> Any:
+            if not isinstance(data, dict):
+                return data
+            if data.get("wavix_sample_rate") is not None:
+                warn_deprecated(
+                    "`WavixFrameSerializer.InputParams.wavix_sample_rate` is deprecated. "
+                    "Use `audio_in_sample_rate` and `audio_out_sample_rate` instead.",
+                    stacklevel=4,
+                )
+                data.setdefault("audio_in_sample_rate", data["wavix_sample_rate"])
+                data.setdefault("audio_out_sample_rate", data["wavix_sample_rate"])
+            if data.get("sample_rate") is not None:
+                warn_deprecated(
+                    "`WavixFrameSerializer.InputParams.sample_rate` is deprecated. "
+                    "Use `PipelineParams.audio_in_sample_rate` instead.",
+                    stacklevel=4,
+                )
+            return data
 
     def __init__(
         self,
         stream_id: str,
-        params: Optional["WavixFrameSerializer.InputParams"] = None,
+        params: WavixFrameSerializer.InputParams | None = None,
     ) -> None:
-        if params is None:
-            params = WavixFrameSerializer.InputParams()
+        params = params or WavixFrameSerializer.InputParams()
 
+        # The base serializer owns the resamplers: inbound audio is converted
+        # from the Wavix wire rate to the pipeline input rate, and outbound
+        # audio from the pipeline output rate to the Wavix wire rate.
         super().__init__(params)
+        self._params: WavixFrameSerializer.InputParams = params
 
         self._stream_id = stream_id
-        self._sample_rate = params.sample_rate
-        self._wavix_sample_rate = params.wavix_sample_rate
         self._audio_track = params.audio_track
 
-        # Audio is transmitted on the wire as little-endian PCM16 mono at 24 kHz.
-        # We resample inbound to the pipeline rate and outbound back to the Wavix rate.
-        self._input_resampler = create_stream_resampler()
-        self._output_resampler = create_stream_resampler()
-
-    async def setup(self, frame: StartFrame) -> None:
+    async def setup(self, setup: FrameProcessorSetup) -> None:
         """
-        Initialize serializer sample rate after pipeline startup.
+        Initialize the serializer when the transport is set up.
 
-        If sample_rate is explicitly provided in params, use it.
-        Otherwise use StartFrame.audio_in_sample_rate.
+        Inbound audio is converted to the pipeline's input sample rate,
+        unless the deprecated sample_rate param overrides it.
         """
-        self._sample_rate = self._params.sample_rate or frame.audio_in_sample_rate
+        await super().setup(setup)
+
+        if self._params.sample_rate:
+            self._sample_rate = self._params.sample_rate
 
         logger.debug(
-            "Serializer setup: internal_sample_rate={} wavix_sample_rate={}",
+            "Serializer setup: internal_sample_rate={} wavix_in_sample_rate={} "
+            "wavix_out_sample_rate={}",
             self._sample_rate,
-            self._wavix_sample_rate,
+            self.audio_in_sample_rate,
+            self.audio_out_sample_rate,
         )
 
     async def serialize(self, frame: Frame) -> str | bytes | None:
@@ -132,33 +163,15 @@ class WavixFrameSerializer(FrameSerializer):
         Outbound audio is normalized to Wavix's required format:
         PCM16, 24 kHz, mono, little-endian, 20 ms frames.
         """
-        if isinstance(frame, StartFrame):
-            await self.setup(frame)
-            return None
-
-        if isinstance(frame, EndFrame):
-            return None
-
-        if self._sample_rate is None:
-            logger.warning("Sample rate not set up yet, cannot serialize audio frames.")
-            return None
-
         if isinstance(frame, InterruptionFrame):
+            # Drop the outbound audio still held by the resampler so it is not
+            # played after the interruption.
+            await self._reset_audio_out()
             return json.dumps({"event": "clear", "stream_id": self._stream_id})
 
         if isinstance(frame, AudioRawFrame):
-            audio = frame.audio
-            if not audio:
+            if not frame.audio:
                 return None
-
-            if frame.sample_rate != self._wavix_sample_rate:
-                audio = await self._output_resampler.resample(
-                    audio,
-                    frame.sample_rate,
-                    self._wavix_sample_rate,
-                )
-                if not audio:
-                    return None
 
             if frame.num_channels != self.NUM_CHANNELS:
                 logger.warning(
@@ -166,6 +179,10 @@ class WavixFrameSerializer(FrameSerializer):
                     frame.num_channels,
                     self.NUM_CHANNELS,
                 )
+                return None
+
+            audio = await self._resample_audio_out(frame)
+            if not audio:
                 return None
 
             chunk = bytes(audio)
@@ -241,18 +258,12 @@ class WavixFrameSerializer(FrameSerializer):
                     self.FRAME_DURATION_MS,
                 )
 
-            if self._sample_rate is None:
+            if not self._sample_rate:
                 logger.warning("[WavixFrameSerializer] Internal sample rate is not initialized")
                 return None
 
-            if self._wavix_sample_rate != self._sample_rate:
-                pcm_bytes = await self._input_resampler.resample(
-                    pcm_bytes,
-                    self._wavix_sample_rate,
-                    self._sample_rate,
-                )
-
-            if pcm_bytes is None or len(pcm_bytes) == 0:
+            pcm_bytes = await self._resample_audio_in(pcm_bytes)
+            if not pcm_bytes:
                 return None
 
             return InputAudioRawFrame(

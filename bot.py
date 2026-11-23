@@ -40,8 +40,7 @@ from loguru import logger
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.frames.frames import EndFrame, LLMContextFrame
 from pipecat.pipeline.pipeline import Pipeline
-from pipecat.pipeline.runner import PipelineRunner
-from pipecat.pipeline.task import PipelineParams, PipelineTask
+from pipecat.pipeline.worker import PipelineParams, PipelineWorker
 from pipecat.processors.aggregators.llm_context import LLMContext
 from pipecat.processors.aggregators.llm_response_universal import (
     LLMContextAggregatorPair,
@@ -57,8 +56,9 @@ from pipecat.transports.websocket.fastapi import (
 )
 from pipecat.transports.base_transport import BaseTransport
 from pipecat.runner.types import RunnerArguments
+from pipecat.workers.runner import WorkerRunner
 
-from wavix_serializer import WavixFrameSerializer
+from pipecat_wavix import WavixFrameSerializer
 load_dotenv()
 
 # Suppress noisy third-party loggers that clutter the console during a call.
@@ -182,8 +182,8 @@ async def bot(runner_args: RunnerArguments):
     serializer = WavixFrameSerializer(
         stream_id=call_data["stream_id"],
         params=WavixFrameSerializer.InputParams(
-            wavix_sample_rate=WAVIX_SAMPLE_RATE,
-            sample_rate=BOT_SAMPLE_RATE,
+            audio_in_sample_rate=WAVIX_SAMPLE_RATE,
+            audio_out_sample_rate=WAVIX_SAMPLE_RATE,
             audio_track="inbound",
         ),
     )    
@@ -267,12 +267,11 @@ async def run_bot(
         ]
     )
 
-    task = PipelineTask(
+    task = PipelineWorker(
         pipeline,
         params=PipelineParams(
             audio_in_sample_rate=BOT_SAMPLE_RATE,
             audio_out_sample_rate=WAVIX_SAMPLE_RATE,
-            allow_interruptions=True,
             enable_metrics=True,
             report_only_initial_ttfb=True,
         ),
@@ -296,8 +295,9 @@ async def run_bot(
     # `force_gc=True` to force garbage collection after
     # the runner finishes running a task which could be useful for long running
     # applications with multiple clients connecting.
-    runner = PipelineRunner(handle_sigint=handle_sigint, force_gc=True)
-    await runner.run(task)
+    runner = WorkerRunner(handle_sigint=handle_sigint, force_gc=True)
+    await runner.add_workers(task)
+    await runner.run()
 
 if __name__ == "__main__":
     from pipecat.runner.run import main, TELEPHONY_TRANSPORTS

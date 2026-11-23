@@ -93,7 +93,7 @@ If you use `uv`, add it to your `pyproject.toml`:
 ```toml
 [project]
 dependencies = [
-    "pipecat-wavix>=1.1.0"
+    "pipecat-wavix>=1.2.0"
 ]
 ```
 
@@ -122,12 +122,14 @@ BOT_SAMPLE_RATE = 16000
 serializer = WavixFrameSerializer(
     stream_id=stream_id,
     params=WavixFrameSerializer.InputParams(
-        wavix_sample_rate=WAVIX_SAMPLE_RATE,
-        sample_rate=BOT_SAMPLE_RATE,
+        audio_in_sample_rate=WAVIX_SAMPLE_RATE,
+        audio_out_sample_rate=WAVIX_SAMPLE_RATE,
         audio_track="inbound",
     ),
 )
 ```
+
+Inbound audio is converted to the pipeline's input sample rate, so set `audio_in_sample_rate=BOT_SAMPLE_RATE` in `PipelineParams`.
 
 Set up the transport:
 
